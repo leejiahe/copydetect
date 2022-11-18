@@ -11,3 +11,5 @@ accelerator: gpu
 devices: 4
 num_nodes: 1
 sync_batchnorm: True
+precision: 16
+accumulate_grad_batches: 4
