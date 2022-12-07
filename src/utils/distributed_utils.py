@@ -6,8 +6,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import enum
-
 import torch
 from classy_vision.generic.distributed_util import (all_reduce_mean,
                                                     all_reduce_sum,
@@ -17,24 +15,17 @@ from classy_vision.generic.distributed_util import (all_reduce_mean,
 from torch import autograd, distributed
 
 
-def multi_gather_batch(*tensors):
-    """Gather tensors across nodes / GPUs.
-    Tensors must have the same shape on all devices. Gathering for each
-    tensor happens in parallel.
-    """
 
+def multi_gather_batch(*tensors):
     world_size = distributed.get_world_size()
     out = []
     handles = []
 
     for tensor in tensors:
         gathered_shape = (world_size * tensor.shape[0],) + tensor.shape[1:]
-
         gathered = torch.empty(gathered_shape, dtype=tensor.dtype, device=tensor.device)
-        # Non-contiguous tensors seem to get scrambled. Source and dest memory layouts
-        # may have to match.
         tensor = tensor.contiguous()
-        handle = distributed.all_gather(list(torch.chunk(gathered, world_size)), tensor, async_op = True)
+        handle = distributed.all_gather(list(torch.chunk(gathered, world_size)), tensor, async_op=True)
 
         out.append(gathered)
         handles.append(handle)
@@ -46,21 +37,9 @@ def multi_gather_batch(*tensors):
 
 
 
-class ReduceMethod(enum.Enum):
-    SUM = enum.auto()
-    MEAN = enum.auto()
-    # No gradient aggregation (eg. where all GPUs compute the same loss)
-    NONE = enum.auto()
-
-
-
-class _CrossGPUBatch(autograd.Function):
-    """Aggregates embeddings and labels across GPUs.
-    This requires that batches have the same size on each GPU.
-    """
-
+class GatherAcrossGPU(autograd.Function):
     @staticmethod
-    def forward(ctx, embeddings, target, reduce_method: ReduceMethod):
+    def forward(ctx, embeddings, target, reduce_method):
         ctx.n = embeddings.size(0)
         ctx.reduce_method = reduce_method
         ctx.world_size = get_world_size()
@@ -79,26 +58,26 @@ class _CrossGPUBatch(autograd.Function):
         return all_embeddings, all_target
 
     @staticmethod
-    def backward(ctx, all_embeddings_gradient, ignored_target_grad = None):
+    def backward(ctx, all_embeddings_gradient, ignored_target_grad=None):
         if ctx.world_size == 1:
             embeddings_gradient = all_embeddings_gradient
         else:
             # Aggregate gradients across nodes.
-            if ctx.reduce_method == ReduceMethod.MEAN:
+            if ctx.reduce_method == 'mean':
                 all_reduce_mean(all_embeddings_gradient)
-            elif ctx.reduce_method == ReduceMethod.SUM:
+            elif ctx.reduce_method == 'sum':
                 all_reduce_sum(all_embeddings_gradient)
             else:
                 # Do not accumulate.
-                assert ctx.reduce_method == ReduceMethod.NONE
+                raise ValueError('Reduce method not found')
             rank = get_rank()
             start = ctx.n * rank
             end = start + ctx.n
             # Slice gradient for embeddings that belong to this node.
             embeddings_gradient = all_embeddings_gradient[start:end]
         return (embeddings_gradient, None, None)
-
-cross_gpu_batch = _CrossGPUBatch.apply
-
-def cross_gpu_batch(embeddings, targets, reduce_method = ReduceMethod.SUM):
-    return _CrossGPUBatch.apply(embeddings, targets, reduce_method)
+    
+    
+    
+def gather_across_gpu(embeddings, targets, reduce_method='sum'):
+    return GatherAcrossGPU.apply(embeddings, targets, reduce_method)

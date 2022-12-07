@@ -13,10 +13,12 @@ from collections import defaultdict
 import numpy as np
 
 
+
 @dataclass
 class GroundTruthMatch:
     query: str
     db: str
+
 
 
 @dataclass
@@ -24,6 +26,7 @@ class PredictedMatch:
     query: str
     db: str
     score: float
+
 
 
 @dataclass
@@ -38,9 +41,11 @@ class Metrics:
     recall_at_rank10: float
 
 
+
 def argsort(seq):
     # from https://stackoverflow.com/a/3382369/3853462
     return sorted(range(len(seq)), key=seq.__getitem__)
+
 
 
 def precision_recall(
@@ -81,6 +86,7 @@ def precision_recall(
     return precisions, recalls, probas_pred
 
 
+
 def average_precision_old(recalls: np.ndarray, precisions: np.ndarray):
     """
     Compute the micro average-precision score (uAP).
@@ -102,6 +108,7 @@ def average_precision_old(recalls: np.ndarray, precisions: np.ndarray):
     return ((recalls[1:] - recalls[:-1]) * precisions[:-1]).sum()
 
 
+
 # Jay Qi's version
 def average_precision(recalls: np.ndarray, precisions: np.ndarray):
     # Order by increasing recall
@@ -114,6 +121,7 @@ def average_precision(recalls: np.ndarray, precisions: np.ndarray):
         raise Exception("recalls array must be sorted before passing in")
 
     return ((recalls - np.concatenate([[0], recalls[:-1]])) * precisions).sum()
+
 
 
 def find_operating_point(
@@ -139,6 +147,7 @@ def find_operating_point(
     return valid_x[best_idx], valid_y[best_idx], valid_z[best_idx]
 
 
+
 def check_duplicates(predictions: List[PredictedMatch]) -> List[PredictedMatch]:
     """
     Raise an exception if predictions contains duplicates
@@ -149,10 +158,12 @@ def check_duplicates(predictions: List[PredictedMatch]) -> List[PredictedMatch]:
         raise ValueError("Predictions contains duplicates.")
 
 
+
 def sanitize_predictions(predictions: List[PredictedMatch]) -> List[PredictedMatch]:
     # TODO(lowik) check for other possible loopholes
     check_duplicates(predictions)
     return predictions
+
 
 
 def to_arrays(gt_matches: List[GroundTruthMatch], predictions: List[PredictedMatch]):
@@ -163,6 +174,7 @@ def to_arrays(gt_matches: List[GroundTruthMatch], predictions: List[PredictedMat
     probas_pred = np.array([p.score for p in predictions])
     y_true = np.array([(p.query, p.db) in gt_set for p in predictions], dtype=bool)
     return y_true, probas_pred
+
 
 
 def find_tp_ranks(
@@ -189,6 +201,7 @@ def find_tp_ranks(
     return np.array(ranks)
 
 
+
 def evaluate(
     gt_matches: List[GroundTruthMatch], predictions: List[PredictedMatch]
 ) -> Metrics:
@@ -211,6 +224,7 @@ def evaluate(
         recall_at_rank1=recall_at_rank1,
         recall_at_rank10=recall_at_rank10,
     )
+
 
 
 def print_metrics(metrics: Metrics):

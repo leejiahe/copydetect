@@ -1,14 +1,15 @@
 _target_: src.models.copydetector_module.CopyDetectorModule
 
-dino_model: 'vitbase'
+dino_model: 'vit'
+dino_size: base
 patch_size: 16
 temperature: 0.05
 entropy_weight: 10
 global_embedding_size: 512
 region_embedding_size: 512
 cross_batch_memory_size: 4096
-lr: 0.0005
-warmup_epochs: 5
+lr: 0.00001
+warmup_epochs: 2
 warmup_start_lr: 0.01
 weight_decay:  1e-6
 beta1: 0.9
@@ -16,5 +17,5 @@ beta2: 0.999
 lambda1: 1
 lambda2: 1
 lambda3: 1
-alpha: 0.9
+logging_dir: "${paths.log_dir}"
 k_candidates: 10

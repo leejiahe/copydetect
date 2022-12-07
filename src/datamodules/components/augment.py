@@ -23,15 +23,14 @@ class Augmentation:
                  ):
         
         self.n_augments = n_augments
-        CROP_SIZE = 256
+        CROP_SIZE = 128
         
         geometric = [A.HorizontalFlip(p = 1),
                      A.VerticalFlip(p = 1),
                      A.Perspective(p = 1),
                      A.ShiftScaleRotate(shift_limit = 0.3, rotate_limit = 90, p = 1),
                      A.RandomScale(p = 1),
-                     A.RandomResizedCrop(height = CROP_SIZE, width = CROP_SIZE, p = 1),
-                     A.RandomSizedCrop(min_max_height = (64, 256), height = CROP_SIZE, width = CROP_SIZE, p = 1),
+                     A.RandomResizedCrop(height = CROP_SIZE, width = CROP_SIZE, p = 1), #A.RandomSizedCrop(min_max_height = (64, CROP_SIZE), height = CROP_SIZE, width = CROP_SIZE, p = 1),
                      ]
         
         photometric = [ApplyIGFilter(),
@@ -95,9 +94,12 @@ class Augmentation:
                                       p = self.augment_prob)
 
         for transform in transforms:
-            image = transform(image = image)
-            if type(image) == dict:
-                image = image['image']
+            try:
+                image = transform(image = image)
+                if type(image) == dict:
+                    image = image['image']
+            except:
+                print(f'Unable to apply transformation: {transform}')
         return image
     
     

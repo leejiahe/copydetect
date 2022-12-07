@@ -240,7 +240,7 @@ class ApplyIGFilter:
 class BlendImage:
     def __init__(self, bg_image_dir: str):
         self.css_blends = ['color', 'color_burn', 'darken', 'difference', 'exclusion',
-                           'hard_light', 'hue', 'lighten', 'multiply', 'screen']
+                           'hue', 'lighten', 'multiply', 'screen']
         self.path, self.bg_image = get_image_paths(bg_image_dir)
         self.bg_image = random.sample(self.bg_image, 50000)
         
