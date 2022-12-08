@@ -77,8 +77,8 @@ class DISCTrainingDataset(Dataset):
 
         self.isc_path, self.files = get_image_paths(train_path)
         ############################SANITY CHECK##############################
-        self.files = self.files[:40] # Sanity Check
-        #self.files = self.files[:25000]
+        #self.files = self.files[:40] # Sanity Check
+        self.files = self.files[:25000]
         self.metadata = ['I' for _ in range(len(self.files))]
         
         # Include additional hard negative training samples from NEDC dataset
@@ -193,7 +193,6 @@ class DISCEvalDataset(Dataset):
                 transform:object,
                 patchify: object = None,
                 train_path: str = None,
-                image_size: int = 384,
                 ref_subset_path: str = None,
                 query_subset_path: str = None):
         
@@ -203,11 +202,11 @@ class DISCEvalDataset(Dataset):
         if ref_subset_path:
             ref_subset = open(ref_subset_path, 'r').read().splitlines()
             ############################SANITY CHECK##############################
-            ref_subset = ref_subset[:50] # Sanity check
+            #ref_subset = ref_subset[:50] # Sanity check
         if query_subset_path:
             query_subset = open(query_subset_path, 'r').read().splitlines()
             ############################SANITY CHECK##############################
-            query_subset = query_subset[:50] # Sanity check
+            #query_subset = query_subset[:50] # Sanity check
             
         self.files, self.metadata = self.read_files(ref_path, SPLIT_REFER, ref_subset)
         query_files, query_metadata = self.read_files(query_path, SPLIT_QUERY, query_subset)
@@ -219,8 +218,8 @@ class DISCEvalDataset(Dataset):
             #self.files.extend(train_files)
             #self.metadata.extend(train_metadata)
             ############################SANITY CHECK##############################
-            self.files.extend(train_files[:100])
-            self.metadata.extend(train_metadata[:100])
+            self.files.extend(train_files[:25000])
+            self.metadata.extend(train_metadata[:25000])
         
         self.gt = read_ground_truth(gt_path)
         self.transform = transform
@@ -330,7 +329,9 @@ class CopyDetectorDataModule(LightningDataModule):
                 
         self.train_dataset = DISCTrainingDataset(train_path = self.train_path,
                                                  repeated_augment = repeated_augment,
-                                                 ndec_path = self.ndec_path) 
+                                                 ndec_path = self.ndec_path)
+        
+        print(f'Training dataset contains {len(self.train_dataset)} images.')
         
         val_transform = A.Compose([A.Resize(self.val_img_size, self.val_img_size),
                                    A.Normalize(),
@@ -342,6 +343,8 @@ class CopyDetectorDataModule(LightningDataModule):
                                            transform = val_transform,
                                            ref_subset_path = self.ref_subset_path,
                                            query_subset_path = self.query_subset_path)
+        
+        print(f'Validation dataset contains {len(self.val_dataset)} images.')
         
         patchify = PatchifyTransform()
         
@@ -357,6 +360,8 @@ class CopyDetectorDataModule(LightningDataModule):
                                             train_path = self.train_path,
                                             ref_subset_path = self.ref_subset_path,
                                             query_subset_path = self.query_subset_path)
+        
+        print(f'Test dataset contains {len(self.test_dataset)} images.')
         
     def train_dataloader(self) -> DataLoader:
         return DataLoader(self.train_dataset,

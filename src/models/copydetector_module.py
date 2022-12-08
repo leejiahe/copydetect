@@ -17,6 +17,8 @@ from pytorch_metric_learning.losses import NTXentLoss, MultiSimilarityLoss, Cros
 from pytorch_metric_learning.utils.distributed import DistributedLossWrapper
 from pytorch_metric_learning.miners import MultiSimilarityMiner
 
+from torchmetrics.classification import Accuracy
+
 from src.utils import get_region_vector, get_local_vector
 from src.datamodules.disc_datamodule import BatchRecords
 from src.models.components.matching import retrieve_candidate_set, remove_duplicates, Embeddings
@@ -114,6 +116,8 @@ class CopyDetectorModule(LightningModule):
         self.k_candidates = k_candidates
         
         self.n_repeat_aug = 1
+        
+        self.accuracy = Accuracy()
         
         # For saving embedding during test phase
         self.set_test = False
@@ -234,12 +238,7 @@ class CopyDetectorModule(LightningModule):
         # Global contrastive loss is computed at training_step_end 
         projected = self.projection(cls_token) # Projection of CLS token
         global_loss = self.global_loss(projected, label)
-        self.log_dict({'contrastive_loss':global_loss},
-                      on_step = True,
-                      on_epoch = True,
-                      sync_dist = True,
-                      rank_zero_only = True)
-        
+    
         #gathered_projected, gathered_label = gather_across_gpu(projected, label)
         #self.projected_xbm.enqueue(gathered_projected.detach(), gathered_label.detach())
         
@@ -257,7 +256,11 @@ class CopyDetectorModule(LightningModule):
         #                                           xbm_label.to(label),
         #                                           rank = self.global_rank)
         
-        
+        self.log_dict({'contrastive_loss':global_loss},
+                      on_step = True,
+                      on_epoch = True,
+                      sync_dist = True,
+                      rank_zero_only = True)
         """
         # Get salient regions
         region = get_region_vector(embeddings, att)
@@ -268,6 +271,11 @@ class CopyDetectorModule(LightningModule):
         
         # Compute multi-similarity loss
         region_loss = self.region_loss(region, label, indice_tuples)
+        self.log_dict({'region_loss':region_loss},
+                        on_step = True,
+                        on_epoch = True,
+                        sync_dist = True,
+                        rank_zero_only = True)
         """
         
         
@@ -299,9 +307,21 @@ class CopyDetectorModule(LightningModule):
 
             label = torch.cat((label, shuffled_label))
         bce_loss = self.bce_loss(pred, label.unsqueeze(1))
+        self.log_dict({'bce_loss':bce_loss},
+                        on_step = True,
+                        on_epoch = True,
+                        sync_dist = True,
+                        rank_zero_only = True)
+                      
+        acc = self.accuracy(pred, label.int())
+        self.log({'CopyHead accuracy':acc},
+                 on_step = True,
+                 on_epoch = True,
+                 rank_zero_only = True,
+                 )
         """
-        bce_loss = 0
         
+        bce_loss = 0
         
         """
         for i in range(n_repeat_aug):
@@ -338,6 +358,11 @@ class CopyDetectorModule(LightningModule):
                region_loss * self.lambda2 + \
                bce_loss * self.lambda3
         
+        self.log_dict({'total_loss':loss},
+                      on_step = True,
+                      on_epoch = True,
+                      sync_dist = True,
+                      rank_zero_only = True)
         return loss
         
         
@@ -367,7 +392,7 @@ class CopyDetectorModule(LightningModule):
             if self.set_test:
                 embeddings.save_to_h5py(self.h5py_path)
             else:
-                print('Validation')
+                print('-----Validation-----')
                 candidate_set = retrieve_candidate_set(embeddings,
                                                        self.k_candidates,
                                                        use_gpu = False)

@@ -56,20 +56,29 @@ class Embeddings:
         if len(train_mask) > 0:
             train_mask = batchrecords.split == SPLIT_TRAIN
             self.train_feat = batchrecords.feat_agg[train_mask, :]
-            
+    
+    def sort_by_name(self, names):
+        name_arr = np.array([bytes(name, "ascii") for name in names])
+        index = name_arr.argsort()
+        return name_arr, index 
+    
     def save_to_h5py(self, h5py_path):
+        # Sort the index by name. Evaluation script prefer sorted list.
+        query_name, query_idx = self.sort_by_name(self.query_name)
+        refer_name, refer_idx = self.sort_by_name(self.query_name)
+        
         with h5py.File(h5py_path, 'w') as f:
-            f.create_dataset('query_feat', data=self.query_feat)
-            f.create_dataset('query_name', data=self.query_name)
-            f.create_dataset('query_emb', data=self.query_emb)
-            f.create_dataset('query_patch', data=self.query_patch)
+            f.create_dataset('query_feat', data = self.query_feat[query_idx].astype('float32'))
+            f.create_dataset('query_name', data = query_name)
+            f.create_dataset('query_emb', data = self.query_emb[query_idx].astype('float32'))
+            f.create_dataset('query_patch', data = self.query_patch[query_idx].astype('float32'))
 
-            f.create_dataset('refer_feat', data=self.refer_feat)
-            f.create_dataset('refer_name', data=self.refer_name)
-            f.create_dataset('refer_emb', data=self.refer_emb)
-            f.create_dataset('refer_patch', data=self.refer_patch)
+            f.create_dataset('refer_feat', data = self.refer_feat[refer_idx].astype('float32'))
+            f.create_dataset('refer_name', data = refer_name)
+            f.create_dataset('refer_emb', data = self.refer_emb[refer_idx].astype('float32'))
+            f.create_dataset('refer_patch', data = self.refer_patch[refer_idx].astype('float32'))
 
-            f.create_dataset('train_feat', data=self.train_feat)
+            f.create_dataset('train_feat', data = self.train_feat)
 
     def load_from_h5py(self, h5py_path):
         with h5py.File(h5py_path, 'r') as f:

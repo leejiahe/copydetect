@@ -113,7 +113,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
                                     drop_last = False, 
                                     )
         
-        trainer.test(model = model, dataloaders = matched_loader)
+        trainer.test(model = model, dataloaders = matched_loader, ckpt_path = ckpt_path)
         
         scores_path = os.path.join(model.logging_dir, 'scores.npy')
         gt = datamodule.val_dataset.gt
