@@ -3,6 +3,8 @@ from multiprocessing.pool import ThreadPool
 
 from torchvision.datasets.utils import download_and_extract_archive
 
+
+
 def download_file(urlInfo):
     download_root, url = urlInfo
     foldername = url.split('/')[-1]
@@ -10,6 +12,8 @@ def download_file(urlInfo):
                                  download_root = download_root,
                                  remove_finished = True)
     return foldername
+
+
 
 def main(root_dir):
     copy_dir = os.path.join(root_dir, 'copydays')
@@ -33,6 +37,8 @@ def main(root_dir):
     
     for result in results:
         print(f'Finish downloading {result}')
+
+
 
 if __name__ == '__main__':
     main('/home/stevenlee/copydetect/data')

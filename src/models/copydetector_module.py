@@ -13,8 +13,6 @@ from pytorch_lightning.utilities.apply_func import move_data_to_device
 import deepspeed
 from deepspeed.ops.adam import DeepSpeedCPUAdam
 
-from einops import rearrange, repeat
-
 from pytorch_metric_learning.losses import NTXentLoss, MultiSimilarityLoss, CrossBatchMemory
 from pytorch_metric_learning.utils.distributed import DistributedLossWrapper
 from pytorch_metric_learning.miners import MultiSimilarityMiner
@@ -71,7 +69,8 @@ class CopyDetectorModule(LightningModule):
                                         nn.LayerNorm(global_embedding_size))
         
         # Whitening Layer
-        self.whitening = nn.Linear(self.model.embed_dim, region_embedding_size, bias = True)
+        self.whitening = nn.Sequential(nn.Linear(self.model.embed_dim, region_embedding_size, bias = True),
+                                       nn.LayerNorm(region_embedding_size))
         
         # Global distributed NTXent Loss
         self.global_loss = NTXentLoss(temperature = temperature)
@@ -80,26 +79,29 @@ class CopyDetectorModule(LightningModule):
         #                               embedding_size = global_embedding_size,
         #                               memory_size = cross_batch_memory_size)
         #self.global_loss = DistributedLossWrapper(global_loss)
-                                       
-        #self.global_loss = NTXentKoLeoLoss(temperature = temperature,
-        #                                   entropy_weight = entropy_weight)
+        """                    
+        self.global_loss = NTXentKoLeoLoss(temperature = temperature,
+                                           entropy_weight = entropy_weight)
         # Cross-batch memory
-        #self.projected_xbm = XBM(embedding_size = global_embedding_size,
-        #                         memory_size = cross_batch_memory_size)
-
+        self.projected_xbm = XBM(embedding_size = global_embedding_size,
+                                 memory_size = cross_batch_memory_size)
+        """ 
         
         # Region distributed Multi-Similarity Loss
+        """
         self.miner = MultiSimilarityMiner() # Multi-Similarity Miner
         region_loss = CrossBatchMemory(MultiSimilarityLoss(),
                                        embedding_size = region_embedding_size,
                                        memory_size = cross_batch_memory_size,
                                        miner = self.miner)
         self.region_loss = DistributedLossWrapper(region_loss)
-
+        """
         
         # CopyDetector
-        self.copyhead = CopyHead()
-        self.bce_loss = nn.BCELoss()
+        """
+        #self.copyhead = CopyHead()
+        #self.bce_loss = nn.BCELoss()
+        """
         
         self.lr = lr
         self.weight_decay = weight_decay
@@ -183,6 +185,8 @@ class CopyDetectorModule(LightningModule):
         
         # Get projected CLS token
         projected = self.projection(cls_token)
+        #projected = self.projection(get_local_vector(embeddings))
+        
         """
         # Get local features
         feats = get_local_vector(embeddings)
@@ -206,15 +210,11 @@ class CopyDetectorModule(LightningModule):
                       batch_idx: int,
                      ) -> torch.Tensor:
         
-        
-        
         img, label = batch['image0'], batch['instance_id']
         for i in range(self.n_repeat_aug):
             img = torch.cat((img, batch[f'image{i+1}']))
             label = torch.cat((label, batch['instance_id']))
         cls_token, att, embeddings = self(img)
-        
-        
         
         """
         img, label = batch['image0'], batch['instance_id']
@@ -234,11 +234,16 @@ class CopyDetectorModule(LightningModule):
         # Global contrastive loss is computed at training_step_end 
         projected = self.projection(cls_token) # Projection of CLS token
         global_loss = self.global_loss(projected, label)
+        self.log_dict({'contrastive_loss':global_loss},
+                      on_step = True,
+                      on_epoch = True,
+                      sync_dist = True,
+                      rank_zero_only = True)
         
-        gathered_projected, gathered_label = gather_across_gpu(projected, label)
-        self.projected_xbm.enqueue(gathered_projected.detach(), gathered_label.detach())
+        #gathered_projected, gathered_label = gather_across_gpu(projected, label)
+        #self.projected_xbm.enqueue(gathered_projected.detach(), gathered_label.detach())
         
-        xbm_projected, xbm_label = self.projected_xbm.get()
+        #xbm_projected, xbm_label = self.projected_xbm.get()
 
         #global_loss, loss_stats = self.global_loss(projected,
         #                                           label,
@@ -379,14 +384,18 @@ class CopyDetectorModule(LightningModule):
                     #score = self.copydetector(q_emb, r_emb)
                     
                     preds.append(PredictedMatch(q_name, r_name, score))
-                    
+                
+                #predictions = remove_duplicates(preds)
+                predictions = remove_duplicates(preds, ascending = True)
+                
                 gt = self.trainer.datamodule.val_dataset.gt
-                predictions = remove_duplicates(preds)
-                
                 metrics = evaluate(gt, predictions)
+                metrics = {k: 0.0 if v is None else v for (k, v) in metrics.items()}
                 
-                print(metrics.average_precision)
-                #self.log_dict(metrics, on_epoch = True)
+                self.log_dict(metrics,
+                              on_step = False,
+                              on_epoch = True,
+                              rank_zero_only = True)
         
         
     def test_step(self,

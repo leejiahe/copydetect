@@ -106,10 +106,10 @@ class Embeddings:
             
             
             
-def remove_duplicates(pred):
+def remove_duplicates(pred, ascending = False):
     df = pd.DataFrame(pred, columns = ['query', 'db', 'score'])
-    df.sort_values(by = 'score', ascending = False, inplace = True)
-    #df.sort_values(by = 'score', ascending = True, inplace = True) # The distance is negative, so ascending is True
+    df.sort_values(by = 'score', ascending = ascending, inplace = True)
+    
     df.drop_duplicates(subset = ['query', 'db'], keep = 'first', inplace = True)
 
     predictions = []
@@ -124,7 +124,7 @@ def retrieve_candidate_set(embeddings,
                            k_candidates:int = 10,
                            global_candidates:bool = False,
                            metric = faiss.METRIC_L2,
-                           use_gpu:bool=True,
+                           use_gpu:bool = False,
                           ) -> Dict:
 
     if global_candidates:
@@ -152,7 +152,7 @@ def retrieve_candidate_set(embeddings,
             index = faiss.index_cpu_to_gpu(res, 0, index, co)
             
         D, I = index.search(embeddings.query_feat, k = k_candidates)
-        del index
+
         if metric == faiss.METRIC_L2:
             D = -D # use negated distances as scores
         

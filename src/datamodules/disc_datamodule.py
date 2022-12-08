@@ -1,6 +1,7 @@
 import os
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass, field
+import numpy as np
 
 import torch
 from torch.utils.data import Dataset
@@ -288,6 +289,7 @@ class CopyDetectorDataModule(LightningDataModule):
     test_query_path:str
     val_gt_path:str
     test_gt_path:str
+    ndec_path:str = None
     ref_subset_path:str = None
     query_subset_path:str = None
     train_batch_size:int = 2
@@ -327,7 +329,8 @@ class CopyDetectorDataModule(LightningDataModule):
                                            n_repeat_aug = self.n_repeat_aug)
                 
         self.train_dataset = DISCTrainingDataset(train_path = self.train_path,
-                                                 repeated_augment = repeated_augment) 
+                                                 repeated_augment = repeated_augment,
+                                                 ndec_path = self.ndec_path) 
         
         val_transform = A.Compose([A.Resize(self.val_img_size, self.val_img_size),
                                    A.Normalize(),
@@ -379,7 +382,29 @@ class CopyDetectorDataModule(LightningDataModule):
                          batch_size = self.test_batch_size,
                          num_workers = self.workers,
                          persistent_workers = True,
-                         pin_memory = False,
+                         pin_memory = True,
                          collate_fn = collate_batch_fn,
                          shuffle = False,
                          drop_last = False)
+        
+        
+class DISCMatching(Dataset):
+    def __init__(self,
+                query_embs,
+                refer_embs,
+                candidate_set,
+                ):
+        self.query_embs = query_embs
+        self.refer_embs = refer_embs
+        self.candidate_set = candidate_set
+
+    def __len__(self) -> int:
+        return len(self.candidate_set)
+    
+    def __getitem__(self, idx:int):
+        query_idx, refer_idx, _ = self.candidate_set[idx]
+        
+        refer_emb = self.refer_embs[refer_idx]
+        query_emb = self.query_embs[query_idx]
+        
+        return query_emb, refer_emb, query_idx, refer_idx

@@ -1,0 +1,78 @@
+task_name: train
+tags:
+- dev
+train: true
+test: false
+ckpt_path: null
+seed: null
+datamodule:
+  _target_: src.datamodules.disc_datamodule.CopyDetectorDataModule
+  train_path: ${paths.data_dir}/disc21/train/
+  ref_path: ${paths.data_dir}/disc21/references/
+  val_query_path: ${paths.data_dir}/disc21/queries/
+  test_query_path: ${paths.data_dir}/disc21/queries/
+  val_gt_path: ${paths.data_dir}/groundtruth/subset_1_ground_truth.csv
+  test_gt_path: ${paths.data_dir}/groundtruth/subset_1_ground_truth.csv
+  ref_subset_path: ${paths.data_dir}/groundtruth/subset_1_references.txt
+  query_subset_path: ${paths.data_dir}/groundtruth/subset_1_queries.txt
+  train_batch_size: 4
+  train_img_size: 224
+  val_batch_size: 4
+  val_img_size: 224
+  test_batch_size: 2
+  test_img_size: 384
+  workers: 16
+  n_weak_aug: 1
+  n_strong_aug: 3
+  n_repeat_aug: 1
+model:
+  _target_: src.models.copydetector_module.CopyDetectorModule
+  dino_model: vit
+  dino_size: base
+  patch_size: 16
+  temperature: 0.05
+  entropy_weight: 10
+  global_embedding_size: 512
+  region_embedding_size: 512
+  cross_batch_memory_size: 4096
+  lr: 1.0e-05
+  warmup_epochs: 2
+  warmup_start_lr: 0.01
+  weight_decay: 1.0e-06
+  beta1: 0.9
+  beta2: 0.999
+  lambda1: 1
+  lambda2: 1
+  lambda3: 1
+  logging_dir: ${paths.log_dir}
+  k_candidates: 10
+callbacks:
+  model_summary:
+    _target_: pytorch_lightning.callbacks.RichModelSummary
+    max_depth: -1
+  rich_progress_bar:
+    _target_: pytorch_lightning.callbacks.RichProgressBar
+trainer:
+  _target_: pytorch_lightning.Trainer
+  default_root_dir: ${paths.output_dir}
+  min_epochs: 1
+  max_epochs: 2
+  accelerator: gpu
+  strategy: ddp
+  devices:
+  - 2
+  - 3
+  num_nodes: 1
+  check_val_every_n_epoch: 1
+  num_sanity_val_steps: 1
+  deterministic: false
+paths:
+  root_dir: ${oc.env:PROJECT_ROOT}
+  data_dir: ${paths.root_dir}/data
+  log_dir: ${paths.root_dir}/logs/
+  output_dir: ${hydra:runtime.output_dir}
+  work_dir: ${hydra:runtime.cwd}
+extras:
+  ignore_warnings: false
+  enforce_tags: true
+  print_config: true

@@ -3,12 +3,11 @@ _target_: pytorch_lightning.Trainer
 default_root_dir: ${paths.output_dir}
 
 min_epochs: 1
-max_epochs: 10
-#limit_train_batches: 50
-#limit_val_batches: 5
+max_epochs: 2
 
 accelerator: gpu
-devices: 4
+strategy: 'ddp'
+devices: [2,3]
 num_nodes: 1
 
 # mixed precision for extra speed-up
@@ -21,3 +20,6 @@ num_sanity_val_steps: 1
 # set True to to ensure deterministic results
 # makes training slower but gives more reproducibility than just setting seeds
 deterministic: False
+
+# gradient batch before ui
+# accumulate_grad_batches: 4

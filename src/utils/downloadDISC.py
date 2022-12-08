@@ -13,6 +13,8 @@ urls = ['https://dl.fbaipublicfiles.com/image_similarity_challenge/public/dev_qu
         'https://dl.fbaipublicfiles.com/image_similarity_challenge/public/final_queries.zip',
         ]
 
+
+
 def download_file(urlInfo):
     download_root, url = urlInfo
     foldername = url.split('/')[-1]
@@ -26,6 +28,8 @@ def download_file(urlInfo):
         print(f'{foldername} cannot be downloaded')
         
     return foldername
+
+
 
 def main(root_dir:str, threads:int = 8):
     disc_dir = os.path.join(root_dir, 'disc21')
@@ -53,6 +57,7 @@ def main(root_dir:str, threads:int = 8):
     
     for result in results:
         print(f'Finish downloading {result}')
+        
         
 
 if __name__ == '__main__':

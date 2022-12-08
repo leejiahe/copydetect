@@ -23,14 +23,14 @@ class Augmentation:
                  ):
         
         self.n_augments = n_augments
-        CROP_SIZE = 128
         
         geometric = [A.HorizontalFlip(p = 1),
                      A.VerticalFlip(p = 1),
                      A.Perspective(p = 1),
                      A.ShiftScaleRotate(shift_limit = 0.3, rotate_limit = 90, p = 1),
                      A.RandomScale(p = 1),
-                     A.RandomResizedCrop(height = CROP_SIZE, width = CROP_SIZE, p = 1), #A.RandomSizedCrop(min_max_height = (64, CROP_SIZE), height = CROP_SIZE, width = CROP_SIZE, p = 1),
+                     A.CropAndPad(percent = [-0.95, -0.45]),
+                     A.RandomCropFromBorders(crop_left = 0.01, crop_right = 0.01, crop_top = 0.01, crop_bottom = 0.01),
                      ]
         
         photometric = [ApplyIGFilter(),
@@ -42,7 +42,7 @@ class Augmentation:
                        A.ColorJitter(p = 1),
                        A.RandomGamma(p = 1),
                        A.RandomSunFlare(p = 1),
-                       A.InvertImg(p = 1), #noQA
+                       A.InvertImg(p = 1),
                        ]
         
         overlay_over_source = [OverlayRandomText(),
@@ -71,6 +71,7 @@ class Augmentation:
                            A.ISONoise(p = 1),
                            A.OpticalDistortion(p = 1),
                            A.Downscale(p = 1, interpolation = cv2.INTER_AREA),
+                           A.JpegCompression(p = 1.0),
                            ]
         
         if strong_augment:

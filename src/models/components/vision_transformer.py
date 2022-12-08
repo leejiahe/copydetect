@@ -21,7 +21,7 @@ from functools import partial
 import torch
 import torch.nn as nn
 
-from src.utils import trunc_normal_
+from timm.models.layers import trunc_normal_
 
 
 

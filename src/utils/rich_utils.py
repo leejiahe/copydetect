@@ -17,15 +17,13 @@ log = pylogger.get_pylogger(__name__)
 @rank_zero_only
 def print_config_tree(
     cfg: DictConfig,
-    print_order: Sequence[str] = (
-        "datamodule",
-        "model",
-        "callbacks",
-        "logger",
-        "trainer",
-        "paths",
-        "extras",
-    ),
+    print_order: Sequence[str] = ("datamodule",
+                                  "model",
+                                  "callbacks",
+                                  "logger",
+                                  "trainer",
+                                  "paths",
+                                  "extras",),
     resolve: bool = False,
     save_to_file: bool = False,
 ) -> None:
