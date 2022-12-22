@@ -1,4 +1,4 @@
-task_name: train
+task_name: copydetection
 tags:
 - dev
 train: true
@@ -15,13 +15,13 @@ datamodule:
   test_gt_path: ${paths.data_dir}/groundtruth/subset_1_ground_truth.csv
   ref_subset_path: ${paths.data_dir}/groundtruth/subset_1_references.txt
   query_subset_path: ${paths.data_dir}/groundtruth/subset_1_queries.txt
-  train_batch_size: 4
+  train_batch_size: 72
   train_img_size: 224
-  val_batch_size: 4
+  val_batch_size: 32
   val_img_size: 224
   test_batch_size: 2
-  test_img_size: 384
-  workers: 16
+  test_img_size: 224
+  workers: 10
   n_weak_aug: 1
   n_strong_aug: 3
   n_repeat_aug: 1
@@ -44,28 +44,58 @@ model:
   lambda1: 1
   lambda2: 1
   lambda3: 1
-  logging_dir: ${paths.log_dir}
+  logging_dir: ${paths.output_dir}
   k_candidates: 10
 callbacks:
+  model_checkpoint:
+    _target_: pytorch_lightning.callbacks.ModelCheckpoint
+    dirpath: ${paths.log_dir}
+    filename: epoch_{epoch:03d}
+    monitor: total_loss
+    verbose: false
+    save_last: null
+    save_top_k: 1
+    mode: min
+    auto_insert_metric_name: false
+    save_weights_only: false
+    every_n_train_steps: null
+    train_time_interval: null
+    every_n_epochs: 2
+    save_on_train_epoch_end: null
   model_summary:
     _target_: pytorch_lightning.callbacks.RichModelSummary
     max_depth: -1
   rich_progress_bar:
     _target_: pytorch_lightning.callbacks.RichProgressBar
+logger:
+  wandb:
+    _target_: pytorch_lightning.loggers.wandb.WandbLogger
+    save_dir: ${paths.output_dir}
+    offline: false
+    id: null
+    anonymous: null
+    project: copydetection
+    log_model: false
+    prefix: ''
+    group: ''
+    tags: []
+    job_type: train
 trainer:
   _target_: pytorch_lightning.Trainer
   default_root_dir: ${paths.output_dir}
   min_epochs: 1
-  max_epochs: 2
+  max_epochs: 6
   accelerator: gpu
-  strategy: ddp
+  strategy: deepspeed_stage_2
   devices:
   - 2
   - 3
   num_nodes: 1
-  check_val_every_n_epoch: 1
+  check_val_every_n_epoch: 2
   num_sanity_val_steps: 1
   deterministic: false
+  precision: 16
+  sync_batchnorm: true
 paths:
   root_dir: ${oc.env:PROJECT_ROOT}
   data_dir: ${paths.root_dir}/data

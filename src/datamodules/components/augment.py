@@ -71,7 +71,7 @@ class Augmentation:
                            A.ISONoise(p = 1),
                            A.OpticalDistortion(p = 1),
                            A.Downscale(p = 1, interpolation = cv2.INTER_AREA),
-                           A.JpegCompression(p = 1.0),
+                           A.ImageCompression(p = 1.0),
                            ]
         
         if strong_augment:

@@ -2,13 +2,15 @@
 
 model_checkpoint:
   _target_: pytorch_lightning.callbacks.ModelCheckpoint
-  dirpath: ${paths.output_dir}
-  filename: '{epoch}-{loss:.2f}' 
-  monitor: 'uAP' 
+  dirpath: ${paths.log_dir}
+  filename: 'epoch_{epoch:03d}' 
+  monitor: 'total_loss' 
+  #monitor: 'uAP' 
   verbose: False 
   save_last: null 
-  save_top_k: 3
+  save_top_k: 1
   mode: "min" 
+  #mode: "max" 
   auto_insert_metric_name: False
   save_weights_only: False 
   every_n_train_steps: null

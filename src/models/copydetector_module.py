@@ -5,19 +5,22 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from pytorch_lightning import LightningModule
 from pytorch_lightning.utilities.apply_func import move_data_to_device
-#from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 
 import deepspeed
-from deepspeed.ops.adam import DeepSpeedCPUAdam
+from deepspeed.ops.adam import FusedAdam
 
 from pytorch_metric_learning.losses import NTXentLoss, MultiSimilarityLoss, CrossBatchMemory
 from pytorch_metric_learning.utils.distributed import DistributedLossWrapper
 from pytorch_metric_learning.miners import MultiSimilarityMiner
 
 from torchmetrics.classification import Accuracy
+
+from sklearn.metrics.pairwise import cosine_similarity
 
 from src.utils import get_region_vector, get_local_vector
 from src.datamodules.disc_datamodule import BatchRecords
@@ -123,38 +126,32 @@ class CopyDetectorModule(LightningModule):
         self.set_test = False
         self.h5py_path = os.path.join(logging_dir, 'embeddings.h5')
         self.scores_path = os.path.join(logging_dir, 'scores.npy')
-        
-    """
-    def configure_sharded_model(self) -> None:
-        self.model = torch.hub.load('facebookresearch/dino:main', self.dino_pretrain)
-        self.copydetector = CopyDetector()
-    """
-
+    
 
     def configure_optimizers(self):
-        """
-        optimizer = DeepSpeedCPUAdam(self.parameters(),
-                                     lr = self.lr,
-                                     betas = self.beta,
-                                     weight_decay = self.weight_decay)
         
-        scheduler = {'scheduler': LinearWarmupCosineAnnealingLR(optimizer = optimizer,
-                                                                warmup_start_lr = self.warmup_start_lr,
-                                                                warmup_epochs = self.warmup_epochs,
-                                                                max_epochs = self.trainer.max_steps),
+        optimizer = FusedAdam(self.parameters(),
+                              lr = self.lr,
+                              betas = self.beta,
+                              weight_decay = self.weight_decay)
+        
+        """
+        optimizer = AdamW(self.parameters(),
+                          lr = self.lr,
+                          betas = self.beta,
+                          weight_decay = self.weight_decay)
+        """
+
+        return optimizer
+        """
+        scheduler = {'scheduler': CosineAnnealingLR(optimizer = optimizer,
+                                                    T_max = 1000),
                      'interval': 'epoch',
                      'frequency': 1}
         
         return [optimizer], [scheduler]
         """
-        optimizer = torch.optim.Adam(self.parameters(),
-                                     lr = self.lr,
-                                     betas = self.beta,
-                                     weight_decay = self.weight_decay)
-        
 
-        return optimizer
-    
     
     def forward(self,
                 img: List[torch.Tensor],
@@ -177,7 +174,7 @@ class CopyDetectorModule(LightningModule):
                      emb_r: List[torch.Tensor],
                      ) -> torch.Tensor:
         
-        copy_cls = deepspeed.checkpointing.checkpoint(self.copydetect, (emb_q, emb_r))
+        copy_cls = deepspeed.checkpointing.checkpoint(self.copyhead, (emb_r, emb_q))
         return copy_cls
     """
     
@@ -396,13 +393,16 @@ class CopyDetectorModule(LightningModule):
                 candidate_set = retrieve_candidate_set(embeddings,
                                                        self.k_candidates,
                                                        use_gpu = False)
+                print(f'Retrieved {len(candidate_set)} candidates for {embeddings.query_len} queries')
                 
                 preds = []
                 for q_idx, r_idx, dis in candidate_set:
                     q_name = embeddings.query_name[q_idx]
                     r_name = embeddings.refer_name[r_idx]
-                    score = dis
-                    #score = cosine_similarity(embeddings.query_feat[q_idx], embeddings.refer_feat[r_idx])
+                    #score = dis
+                    q_feat = embeddings.query_feat[q_idx].reshape(1, -1)
+                    r_feat = embeddings.refer_feat[r_idx].reshape(1, -1)
+                    score = cosine_similarity(q_feat, r_feat)
                     #q_emb = embeddings.query_emb[q_idx]
                     #r_emb = embeddings.refer_emb[r_idx]
 
@@ -415,11 +415,15 @@ class CopyDetectorModule(LightningModule):
                 
                 gt = self.trainer.datamodule.val_dataset.gt
                 metrics = evaluate(gt, predictions)
-                metrics = {k: 0.0 if v is None else v for (k, v) in metrics.items()}
+                
+                print(f'micro-AP on epoch {self.trainer.current_epoch} is {metrics.average_precision}')
+                
+                metrics_dict = {'uAP':metrics.average_precision,
+                                'acc-at-1':metrics.recall_at_rank1,
+                                'recall-at-p90':metrics.recall_at_p90}
+                metrics = {k: 0.0 if v is None else v for (k, v) in metrics_dict.items()}
                 
                 self.log_dict(metrics,
-                              on_step = False,
-                              on_epoch = True,
                               rank_zero_only = True)
         
         

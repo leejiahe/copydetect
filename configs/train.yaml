@@ -6,10 +6,9 @@ defaults:
   - datamodule: copydetect.yaml
   - model: copydetect.yaml
   - callbacks: default.yaml
-  - logger: null
-#  - logger: wandb.yaml
-  - trainer: default.yaml
-#  - trainer: deepspeed.yaml
+  - logger: wandb.yaml
+#  - trainer: default.yaml
+  - trainer: deepspeed.yaml
   - paths: default.yaml
   - extras: default.yaml
   - hydra: default.yaml
@@ -24,6 +23,7 @@ tags: ["dev"]
 
 train: True
 test: False
+# test: True
 ckpt_path: null
 
 seed: null

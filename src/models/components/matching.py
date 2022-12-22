@@ -1,3 +1,4 @@
+import os
 from typing import Dict
 from dataclasses import dataclass, field, replace
 import h5py
@@ -6,12 +7,15 @@ import numpy as np
 import pandas as pd
 
 import torch.nn as nn
+from torch.utils.data import DataLoader
 
 import faiss
 
+from pytorch_lightning.utilities import rank_zero_only
+
 from src.utils.matching import search_with_capped_res
 from src.utils.metrics import PredictedMatch, evaluate
-
+from src.datamodules.disc_datamodule import DISCMatching
 
 
 SPLIT_REFER = 0
@@ -81,18 +85,21 @@ class Embeddings:
             f.create_dataset('train_feat', data = self.train_feat)
 
     def load_from_h5py(self, h5py_path):
-        with h5py.File(h5py_path, 'r') as f:
-            self.query_feat = f.get('query_feat')[:]
-            self.query_name = f.get('query_name')[:]
-            self.query_emb = f.get('query_emb')[:]
-            self.query_patch = f.get('query_patch')[:]
+        try:
+            with h5py.File(h5py_path, 'r') as f:
+                self.query_feat = f.get('query_feat')[:]
+                self.query_name = f.get('query_name')[:]
+                self.query_emb = f.get('query_emb')[:]
+                self.query_patch = f.get('query_patch')[:]
 
-            self.refer_feat = f.get('refer_feat')[:]
-            self.refer_name = f.get('refer_name')[:]
-            self.refer_emb = f.get('refer_emb')[:]
-            self.refer_patch = f.get('refer_patch')[:]
+                self.refer_feat = f.get('refer_feat')[:]
+                self.refer_name = f.get('refer_name')[:]
+                self.refer_emb = f.get('refer_emb')[:]
+                self.refer_patch = f.get('refer_patch')[:]
 
-            self.train_feat = f.get('train_feat')[:]
+                self.train_feat = f.get('train_feat')[:]
+        except:
+            print(f'Unable to open {h5py_path}')
     
     @property
     def dims(self):
@@ -321,3 +328,37 @@ def tabulate_result(embeddings, scores_path, gt, alpha = 1.0):
     return {"uAP": results.average_precision,
             "accuracy-at-1": results.recall_at_rank1,
             "recall-at-p90": results.recall_at_p90 or 0.0}
+    
+
+def get_candidate_set(logging_dir,
+                      k_candidates,
+                      batch_size,
+                      workers,
+                      ):
+    h5py_path = os.path.join(logging_dir, 'embeddings.h5')
+    embeddings = Embeddings()
+    embeddings.load_from_h5py(h5py_path)
+    embeddings = codec_train(embeddings, score_norm_arg = False)
+
+    candidate_set = retrieve_candidate_set(embeddings = embeddings,
+                                           k_candidates = k_candidates,
+                                           global_candidates = False,
+                                           metric = faiss.METRIC_L2,
+                                           use_gpu = True,
+                                           )
+    
+    matched_dataset = DISCMatching(query_embs = embeddings.query_feat, #query_embs = embeddings.query_emb
+                                   refer_embs = embeddings.refer_feat, #query_embs = embeddings.query_emb
+                                   candidate_set = candidate_set,
+                                   )
+        
+    matched_loader = DataLoader(matched_dataset,
+                                batch_size = batch_size,
+                                num_workers = workers,
+                                persistent_workers = True,
+                                pin_memory = True,
+                                shuffle = False,
+                                drop_last = False, 
+                                )
+    
+    return candidate_set, embeddings, matched_loader

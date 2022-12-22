@@ -73,14 +73,21 @@ class DISCTrainingDataset(Dataset):
     def __init__(self,
                  train_path:str,
                  repeated_augment:RepeatedAugment,
+                 ref_subset_path:str=None,
                  ndec_path:str = None):
-
         self.isc_path, self.files = get_image_paths(train_path)
         ############################SANITY CHECK##############################
         #self.files = self.files[:40] # Sanity Check
         self.files = self.files[:25000]
-        self.metadata = ['I' for _ in range(len(self.files))]
         
+        
+        if ref_subset_path:
+            self.files = self.files[:20009]
+            ref_subset = open(ref_subset_path, 'r').read().splitlines()
+            ref_subset_files = [os.path.join(train_path, f'{file}.jpg') for file in ref_subset]
+            self.files.extend(ref_subset_files)
+            
+        self.metadata = ['I' for _ in range(len(self.files))]
         # Include additional hard negative training samples from NEDC dataset
         if ndec_path:
             self.ndec_path, ndec_files = get_image_paths(ndec_path)
@@ -329,6 +336,7 @@ class CopyDetectorDataModule(LightningDataModule):
                 
         self.train_dataset = DISCTrainingDataset(train_path = self.train_path,
                                                  repeated_augment = repeated_augment,
+                                                 #ref_subset_path = self.ref_subset_path,
                                                  ndec_path = self.ndec_path)
         
         print(f'Training dataset contains {len(self.train_dataset)} images.')
@@ -346,22 +354,7 @@ class CopyDetectorDataModule(LightningDataModule):
         
         print(f'Validation dataset contains {len(self.val_dataset)} images.')
         
-        patchify = PatchifyTransform()
-        
-        test_transform = A.Compose([A.Resize(self.test_img_size, self.test_img_size),
-                                    A.Normalize(),
-                                    ToTensorV2()])
-        
-        self.test_dataset = DISCEvalDataset(ref_path = self.ref_path,
-                                            query_path = self.test_query_path,
-                                            gt_path = self.test_gt_path,
-                                            transform = test_transform,
-                                            patchify = patchify,
-                                            train_path = self.train_path,
-                                            ref_subset_path = self.ref_subset_path,
-                                            query_subset_path = self.query_subset_path)
-        
-        print(f'Test dataset contains {len(self.test_dataset)} images.')
+
         
     def train_dataloader(self) -> DataLoader:
         return DataLoader(self.train_dataset,
@@ -383,6 +376,23 @@ class CopyDetectorDataModule(LightningDataModule):
                          drop_last = False)
     
     def test_dataloader(self) -> DataLoader:
+        patchify = PatchifyTransform()
+        
+        test_transform = A.Compose([A.Resize(self.test_img_size, self.test_img_size),
+                                    A.Normalize(),
+                                    ToTensorV2()])
+        
+        self.test_dataset = DISCEvalDataset(ref_path = self.ref_path,
+                                            query_path = self.test_query_path,
+                                            gt_path = self.test_gt_path,
+                                            transform = test_transform,
+                                            patchify = patchify,
+                                            train_path = self.train_path,
+                                            ref_subset_path = self.ref_subset_path,
+                                            query_subset_path = self.query_subset_path)
+        
+        print(f'Test dataset contains {len(self.test_dataset)} images.')
+        
         return DataLoader(self.test_dataset,
                          batch_size = self.test_batch_size,
                          num_workers = self.workers,
